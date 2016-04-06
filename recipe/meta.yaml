@@ -25,5 +25,5 @@ about:
     home: http://www.foxbms.org
     license: BSD
     license_file: LICENSE
-    author: Tim 
+    summary: foxBMS flash tools, including a command line and a GUI tool
 
