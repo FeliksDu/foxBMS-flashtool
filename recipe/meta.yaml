@@ -1,0 +1,29 @@
+package:
+    name: foxbmsflashtool
+    version: "0.1"
+
+source:
+    path: ..
+
+build:
+    number: 1
+    osx_is_app: True
+    entry_points:
+        - inari = foxbmsflashtool.inari:main
+        - fbflasher = foxbmsflashtool.loader:main
+
+requirements:
+    build:
+        - python
+        - setuptools
+    run:
+        - python
+        - wxpython
+        - pyserial 3.0.1
+
+about:
+    home: http://www.foxbms.org
+    license: BSD
+    license_file: LICENSE
+    author: Tim 
+
