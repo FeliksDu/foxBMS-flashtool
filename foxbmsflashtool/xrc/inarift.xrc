@@ -1,0 +1,171 @@
+<?xml version="1.0" ?>
+<resource>
+  <object class="wxPanel" name="inari_p">
+    <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>Select Firmware File</label>
+            </object>
+            <option>0</option>
+            <flag>wxALL</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxFilePickerCtrl" name="firmware_fp"/>
+            <option>0</option>
+            <flag>wxEXPAND|wxTOP|wxBOTTOM</flag>
+            <border>5</border>
+            <minsize>400,-1</minsize>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>Select Firmware Header File</label>
+            </object>
+            <option>0</option>
+            <flag>wxALL</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxFilePickerCtrl" name="firmware_header_fp"/>
+            <option>0</option>
+            <flag>wxEXPAND|wxTOP|wxBOTTOM</flag>
+            <border>5</border>
+            <minsize>400,-1</minsize>
+          </object>
+          <object class="spacer">
+            <option>1</option>
+            <flag>wxALL|wxEXPAND</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStaticText" name="device_st">
+              <label>No device found.</label>
+              <style>wxALIGN_CENTRE</style>
+            </object>
+            <option>0</option>
+            <flag>wxALL|wxEXPAND</flag>
+            <border>5</border>
+          </object>
+          <object class="spacer">
+            <option>1</option>
+            <flag>wxALL|wxEXPAND</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxBitmapButton" name="flash_b">
+              <bitmap>upload.png</bitmap>
+              <tooltip>flash to foxBMS</tooltip>
+              <enabled>0</enabled>
+              <style>wxBORDER_NONE|wxTRANSPARENT_WINDOW</style>
+            </object>
+            <option>0</option>
+            <flag>wxALL|wxALIGN_CENTRE</flag>
+            <border>5</border>
+            <minsize>65,65</minsize>
+          </object>
+          <orient>wxVERTICAL</orient>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND | wxALL</flag>
+        <border>10</border>
+      </object>
+    </object>
+  </object>
+  <object class="wxPanel" name="details_p">
+    <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
+      <object class="sizeritem">
+        <option>0</option>
+        <flag>wxEXPAND | wxALL</flag>
+        <border>5</border>
+        <object class="wxStaticLine" name="m_staticline1">
+          <style>wxLI_HORIZONTAL</style>
+        </object>
+      </object>
+      <object class="sizeritem">
+        <option>0</option>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>5</border>
+        <object class="wxGauge" name="progress">
+          <style>wxGA_HORIZONTAL</style>
+          <range>100</range>
+          <value>0</value>
+        </object>
+      </object>
+      <object class="sizeritem">
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+        <border>5</border>
+        <object class="wxBoxSizer">
+          <orient>wxHORIZONTAL</orient>
+          <object class="sizeritem">
+            <option>0</option>
+            <flag>wxALL</flag>
+            <border>5</border>
+            <object class="wxStaticText" name="m_staticText21">
+              <label>Output</label>
+              <wrap>-1</wrap>
+            </object>
+          </object>
+          <object class="spacer">
+            <option>1</option>
+            <flag>wxEXPAND</flag>
+            <border>5</border>
+            <size>0,0</size>
+          </object>
+          <object class="sizeritem">
+            <option>0</option>
+            <flag>wxALL</flag>
+            <border>5</border>
+            <object class="wxButton" name="clear_b">
+              <label>Clear</label>
+              <default>0</default>
+            </object>
+          </object>
+        </object>
+      </object>
+      <object class="sizeritem">
+        <option>0</option>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>5</border>
+        <object class="wxTextCtrl" name="details_tc">
+          <style>wxHSCROLL|wxTE_MULTILINE|wxTE_READONLY</style>
+          <size>-1,150</size>
+          <value/>
+        </object>
+      </object>
+    </object>
+  </object>
+  <object class="wxDialog" name="dont_touch_d">
+    <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
+      <object class="sizeritem">
+        <object class="wxStaticText">
+          <label>Don't pet the fox</label>
+          <fg>#EC8107</fg>
+          <bg>#3B505B</bg>
+        </object>
+        <option>0</option>
+        <flag>wxALL|wxALIGN_CENTRE</flag>
+        <border>20</border>
+      </object>
+      <object class="sizeritem">
+        <object class="wxStaticText">
+          <label>Do not touch the device!</label>
+          <fg>#EC8107</fg>
+          <bg>#3B505B</bg>
+        </object>
+        <option>0</option>
+        <flag>wxALL|wxALIGN_CENTRE</flag>
+        <border>20</border>
+      </object>
+    </object>
+    <title>Stand by, while we flash...</title>
+    <fg>#EC8107</fg>
+    <bg>#3B505B</bg>
+    <style>wxCAPTION</style>
+  </object>
+</resource>
