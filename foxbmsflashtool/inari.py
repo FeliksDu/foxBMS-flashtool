@@ -64,7 +64,7 @@ import os
 import sys
 import shutil
 import watchttyusb
-import loader
+import foxflasher
 import threading
 import logging
 import re
@@ -103,7 +103,7 @@ class FlashThread(threading.Thread):
         wx.CallAfter(self.parent.enableWidgets, False)
         wx.CallAfter(self.parent.dontTouch, True)
         # FIXME args
-        with loader.STM32Loader(port = self.parent.port.device, address =
+        with foxflasher.FoxFlasher(port = self.parent.port.device, address =
                 0x08000000, dummy = self.parent.dummy) as l:
             l.erase()
             # write main
@@ -249,7 +249,7 @@ class CustomConsoleHandler(logging.StreamHandler):
 
 
 class FBInariFrame(wx.Frame):
-    PROGRESS_RE = re.compile('\[\s*(\d+)/(\d+)\] .*')
+    PROGRESS_RE = re.compile('\[\s*(\d+)/(\d+)\] (.*)')
 
     def __init__(self, parent, path_fw_h = None, path_fw = None, dummy =
             False):
@@ -294,8 +294,11 @@ class FBInariFrame(wx.Frame):
             return
 
         g = self.PROGRESS_RE.match(msg)
-        if g:
-            self.setProgress(int(g.group(1)) - 1, int(g.group(2)))
+        if g: 
+            if 'written' in g.group(3):
+                self.setProgress(0.5*(int(g.group(1)) - 1), int(g.group(2)))
+            elif 'read' in g.group(3):   
+                self.setProgress(0.5 * int(g.group(2)) + 0.5*(int(g.group(1)) - 1), int(g.group(2)))
 
         _ds = xrc.XRCCTRL(self, 'details_tc').GetDefaultStyle()
         _c = _ds.GetTextColour()
@@ -362,7 +365,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description='foxBMS---Inari flash tool')
 
-    parser.add_argument('-v', '--verbosity', action='count', default=0, help="increase output verbosity")
+    parser.add_argument('-v', '--verbosity', action='count', default=1, help="increase output verbosity")
     parser.add_argument('--header', type=lambda x: getpath(parser, x, 'r'),
             metavar='HEADER',
             help='Header part of firmware')
@@ -374,6 +377,8 @@ def main():
     args = parser.parse_args()
 
     if args.verbosity == 1:
+        logging.basicConfig(level = logging.INFO)        
+    elif args.verbosity > 1:
         logging.basicConfig(level = logging.DEBUG)
     else:
         logging.basicConfig(level = logging.ERROR)

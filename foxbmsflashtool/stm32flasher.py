@@ -48,133 +48,106 @@ Dr.-Ing. Vincent LORENTZ
 info@foxbms.org
 www.foxbms.org
 
-:since:     Tue Mar 22 13:49:40 CET 2016
-:author:    Tim Fuehner <tim.fuehner@iisb.fraunhofer.de>
+:author:    Martin Giegerich <martin.giegerich@iisb.fraunhofer.de>
 """
 
-import stm32loader
-import logging
+import stm32interface
 import argparse
 import sys
-import os
-import time
+import logging
 
-class CommandDummy(object):
+"""
+flash tool implementation to the STM32F4 microcontroller
 
-    def __init__(self):
-        pass
+- for detailed insight to the USART protocol refer to STM32 appnote AN3155
+- for detailed insight to the device bootloader" refer to STM32 appnote AN2606
+"""
 
-    def open(self, aport='/dev/tty.usbserial-ftCYPMYJ', abaudrate=115200):
-        logging.debug("*** Open %s %d" % (aport, abaudrate))
-
-    def readMemory(self, addr, lng):
-        logging.debug("*** Read memory command")
-
-    def writeMemory(self, addr, data):
-        logging.debug("*** Write memory command")
-        lng = len(data)
-        alllng = lng
-        offs = 0
-        while lng > 256:
-            logging.info("[%d/%d] written" % (alllng - lng, alllng))
-            offs = offs + 256
-            addr = addr + 256
-            lng = lng - 256
-            time.sleep(0.007)
-        logging.info("Write %(len)d bytes at 0x%(addr)X" % {'addr': addr, 'len': 256})
-
-    def cmdEraseMemory(self, sectors = None):
-        logging.debug("*** Erase memory command")
-
-    def initChip(self):
-        logging.debug("*** Init chip command")
-
-    def cmdGet(self):
-        return 1
-
-    def cmdGetID(self):
-        return 0x413
-
-    def releaseChip(self):
-        logging.debug("*** Go command")
-
-    def cmdGo(self, addr):
-        logging.debug("*** Go command")
-
-class STM32Loader(object):
-
-    PORT = '/dev/tty.usbserial-ftCYPMYJ'
-    BAUD = 115200
-
-    def __init__(self, port = None, bauds = None,
-            address = 0x08000000, goaddress = -1, bytes = 256, **kwargs):
-
-        self.port = port
-        self.baud = bauds
-        if self.port is None:
-            self.port = self.PORT
-        if self.baud is None:
-            self.baud = self.BAUD
-        self.address = address
-        self.go_addr = goaddress
+class STM32Flasher(stm32interface.STM32Interface):
+    def __init__(self, port = None, file = None, baudrate=115200,
+                 address = 0x08000000, goaddress = -1, bytes = 256,**kwargs):
+        
+        stm32interface.STM32Interface.__init__(self, port, baudrate)
+        self._file = file
         self.bytes = bytes
-        if kwargs.get('dummy', False):
-            self.cmd = CommandDummy()
-        else:
-            self.cmd = stm32loader.CommandInterface()
-        self.cmd.open(self.port, self.baud)
-        try:
-            self.cmd.initChip()
-        except:
-            IOError("Can't init. Ensure that BOOT0 is enabled and reset device")
-        self.bootversion = self.cmd.cmdGet()
-        logging.info("Bootloader version %X" % self.bootversion)
-        self.id = self.cmd.cmdGetID()
-        logging.info("Chip id: 0x%x (%s)" % (self.id, stm32loader.chip_ids.get(self.id, "Unknown")))
-        self.veriFail = None
-
+        self.address = address
+        
+        self._doBeforeInit()
+        self.init()
+        
+    def _doBeforeInit(self):
+        ''' abstract method to optionally reset microcontroller or toggle boot pins '''
+        pass
+        
     def __enter__(self):
         return self
 
-    def __exit__(self ,type, value, traceback):
-        self.close()
-
-    @staticmethod
-    def open(port = None, baud = None):
-        return STM32Loader(port, baud)
-
-    def close(self):
-        self.cmd.releaseChip()
-
-    def erase(self):
-        self.cmd.cmdEraseMemory()
-
+    def read(self):
+        data = []
+        length = self.bytes
+        address = self.address
+        logging.debug("Flash Read Start, Length: {0}, Address: {1:#x} ".format(length, address))
+        
+        while length > 256:
+            logging.debug("Read {0} bytes at {1:#x}".format(256, address))
+            data = data + self.readMemory(address, 256)
+            address += 256
+            length -= 256
+            logging.info("[{0}/{1}] read ".format(self.bytes-length, self.bytes))
+        logging.debug("Read {0} bytes at {1:#x}".format(length, address))
+        data = data + self.readMemory(address, length)
+        logging.info("[{0}/{1}] read".format(self.bytes, self.bytes))
+        return data
+    
     def write(self, data):
-        self.cmd.writeMemory(self.address, data)
-
-    def read(self, buflen = None):
-        if buflen is None:
-            buflen = self.buflen
-        return self.cmd.readMemory(self.address, buflen)
-
+        logging.debug("Flash Write Start")
+        length = len(data)
+        alllng = len(data)
+        address = self.address
+        offset = 0
+        while length > 256:
+            logging.debug("Write {0} bytes at {1:#x}".format(256, address))
+            self.writeMemory(address, data[offset:offset+256])
+            offset += 256
+            address += 256
+            length -= 256
+            logging.info("[{0}/{1}] written".format(alllng-length, alllng))
+        logging.debug("Write {0} bytes at {1:#x}".format(length, address))
+        self.writeMemory(address, data[offset:offset+length] )
+        logging.info("[{0}/{1}] written".format(alllng, alllng))
+        logging.info("Flash Write End")
+        
+    def erase(self):
+        logging.info("Flash Erase Start")
+        super(STM32Flasher, self).erase()
+        logging.info("Flash Erase End")
+        
+        
     def verify(self, data):
-        verify = self.cmd.readMemory(self.address, len(data))
+        logging.info("Flash verify")
+        self.bytes = len(data)
+        verify = self.read()
         if data == verify:
+            logging.info("Verify successful")
             return True
         else:
             self.veriFail = str(len(data)) + ' vs ' + str(len(verify)) + '\n'
             for i in xrange(0, len(data)):
                 if data[i] != verify[i]:
                     self.veriFail += hex(i) + ': ' + hex(data[i]) + ' vs ' + hex(verify[i]) + '\n'
-            logging.debug(self.veriFail)
+            logging.info(self.veriFail)
             return False
-
-    def goAddress(self):
-        self.cmd.cmdGo(self.go_addr)
-
+        
+    def __str__(self):
+        id =  self.getId()[1:3] # id without length byte and ack byte
+        version = self.getVersion()
+        return "ID: %s Bootloader version: %x" % (hex(reduce(lambda x, y: x*0x100+y, id)), version[0])
+    
+def auto_int(x):
+    return int(x, 0)
 
 def main():
-    parser = argparse.ArgumentParser(description='foxBMS---STM32 flash tool', 
+    parser = argparse.ArgumentParser(description='STM32 flash tool', 
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog = '''\
 Example:
@@ -184,42 +157,22 @@ Copyright (c) 2015, 2016 Fraunhofer IISB.
 All rights reserved.
 This program has been released under the conditions of the 3-clause BSD
 license.
-
-Uses stm32loader
-
-Author: Ivan A-R <ivan@tuxotronic.org>
-Project page: http://tuxotronic.org/wiki/projects/stm32loader
-
-This file is part of stm32loader.
-
-stm32loader is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 3, or (at your option) any later
-version.
-
-stm32loader is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or
-FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-for more details.
-
-You should have received a copy of the GNU General Public License
-along with stm32loader; see the file COPYING3.  If not see
-<http://www.gnu.org/licenses/>.''' % sys.argv[0])
-
+''' % sys.argv[0])
+    
     parser.add_argument('-v', '--verbosity', action='count', default=0, help="increase output verbosity")
     parser.add_argument('--erase', '-e', action='store_true', help='erase firmware')
     parser.add_argument('--read',  '-r', action='store_true', help='read and store firmware')
     parser.add_argument('--write',  '-w', action='store_true', help='writes firmware')
     parser.add_argument('--verify', '-y', action='store_true', help='verify the firmware')
-    parser.add_argument('--bytes', '-s', type=int, help='bytes to read from the firmware')
+    parser.add_argument('--bytes', '-s', type=int, default = 256, help='bytes to read from the firmware')
     parser.add_argument('--bauds', '-b', type=int, default=115200, help='transfer speed (bauds)')
     parser.add_argument('--port', '-p', type=str, default='/dev/tty.usbserial-ftCYPMYJ', help='ttyUSB port')
-    parser.add_argument('--address', '-a', type=int, default=0x08000000, help='target address')
-    parser.add_argument('--goaddress', '-g', type=int, default=-1, help='start address (use -1 for default)')
+    parser.add_argument('--address', '-a', type=auto_int, default=0x08000000, help='target address')
+    parser.add_argument('--goaddress', '-g', type=auto_int, default=-1, help='start address (use -1 for default)')
     parser.add_argument('firmware', metavar = 'FIRMWARE FILE', help='firmware binary')
 
     args = parser.parse_args()
-
+    
     if args.verbosity == 1:
         logging.basicConfig(level = logging.INFO)
     elif args.verbosity > 1:
@@ -232,31 +185,32 @@ along with stm32loader; see the file COPYING3.  If not see
             parser.error('Cannot use --erase together with --read')
         if args.write:
             parser.error('Cannot use --write together with --read')
-
-
-    with STM32Loader(**vars(args)) as loader:
+        if args.bytes == None:
+            parser.error('Please give a length (in bytes) to read')
+    
+    with STM32Flasher(**vars(args)) as flasher:        
         if args.write or args.verify:
             with open(args.firmware, 'rb') as f:
                 data = map(lambda c: ord(c), f.read())
 
         if args.erase:
-            loader.erase()
+            flasher.erase()
 
         if args.write:
-            loader.write(data)
+            flasher.write(data)
 
         if args.verify:
-            loader.verify(data)
+            flasher.verify(data)
 
         if args.read:
-            rdata = loader.read()
+            rdata = flasher.read()
             with open(args.firmware, 'wb') as f:
                 f.write(''.join(map(chr,rdata)))
 
         if args.goaddress > -1:
-            loader.goAddress()
+            flasher.go(args.goaddress)
+            
 
 
 if __name__ == "__main__":
     main()
-    
