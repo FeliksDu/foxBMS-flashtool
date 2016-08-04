@@ -81,7 +81,8 @@ class USBWatch(watchttyusb.TTYUSBCheckerThread):
         self.parent = parent
 
     def onConnect(self):
-        wx.CallAfter(self.parent.registerDevice, self.port)
+        watchttyusb.TTYUSBCheckerThread.onConnect(self)
+        wx.CallAfter(self.parent.registerDevice, self.port, self.isPrimary)
 
     def onDisconnect(self):
         wx.CallAfter(self.parent.unregisterDevice)
@@ -169,13 +170,14 @@ class FBInariPanel(wx.Panel):
             self.firmwareSelected = False
         self.setFlashButton()
 
-    def registerDevice(self, port):
+    def registerDevice(self, port, prim = None):
         self.deviceFound = True
         self.port = port
+        self.isPrimary = prim
         if self.dummy:
             xrc.XRCCTRL(self, 'device_st').SetLabel('Device found. (file: ttyusb.dummy found)')
         else:
-            xrc.XRCCTRL(self, 'device_st').SetLabel('Device found. Port: %s' % (self.port.device))
+            xrc.XRCCTRL(self, 'device_st').SetLabel('Device found. Port: %s %s' % (self.port.device, {True:"Primary", False:"Secondary"}.get(self.isPrimary, '')))
         self.setFlashButton()
 
     def unregisterDevice(self):

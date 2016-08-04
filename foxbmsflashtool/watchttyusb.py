@@ -57,14 +57,18 @@ import serial.tools.list_ports
 import time 
 import threading
 
+# flags like on red development foxbms board. adapt accordingly
+primaryCtrlerFlags = {"cts": False, "dsr": False}
+secondaryCtrlerFlags = {"cts": False, "dsr": True}
+CHECK_ISPRIMARY= False
 
-class TTYUSBChecker(object):
-
+class TTYUSBChecker(object):    
     def __init__(self, vid = 0x403, pid = 0x6015):
         self.vid = vid
         self.pid = pid
         self.connected = False
         self.port = None
+        self.isPrimary = None
 
     def isConnected(self):
         for port in list(serial.tools.list_ports.comports()):
@@ -89,7 +93,14 @@ class TTYUSBCheckerThread(TTYUSBChecker, threading.Thread):
         self.stop = False
 
     def onConnect(self):
-        print 'connected'
+        if CHECK_ISPRIMARY:
+            with serial.Serial(port=self.port.device) as _p:    
+                if primaryCtrlerFlags["cts"] == _p.cts and primaryCtrlerFlags["dsr"] == _p.dsr:
+                    self.isPrimary = True
+                elif secondaryCtrlerFlags["cts"] == _p.cts and secondaryCtrlerFlags["dsr"] == _p.dsr:
+                    self.isPrimary = False
+                else:
+                    self.isPrimary = None
 
     def onDisconnect(self):
         print 'disconnected'
