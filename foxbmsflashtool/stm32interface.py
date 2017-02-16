@@ -82,8 +82,15 @@ commandExt = {"Init": 0x7F}
 
 payloadEraseMode = {"Full": chr(0xFF) + chr(0xFF) + chr(0x00),
              "Bank1": chr(0xFF) + chr(0xFE) + chr(0x01),
-             "Bank2": chr(0xFF) + chr(0xFD) + chr(0x02)}
-
+             "Bank2": chr(0xFF) + chr(0xFD) + chr(0x02),
+             "Section0": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x00) + chr(0x00),                                                                                                                                                                                                                                           #checksum
+             "AllSectionsbut0": chr(0x00) + chr(0x0A) + chr(0x00) + chr(0x01) + chr(0x00) + chr(0x02) + chr(0x00) + chr(0x03) + chr(0x00) + chr(0x04) + chr(0x00) + chr(0x05) + chr(0x00) + chr(0x06) + chr(0x00) + chr(0x07) + chr(0x00) + chr(0x08) + chr(0x00) + chr(0x09) + chr(0x00) + chr(0x0A) + chr(0x00) + chr(0x0B) + chr(0x0A),
+             "Section12": chr(0x00) + chr(0x02) + chr(0x00) + chr(0x01) + chr(0x00) + chr(0x02) + chr(0x01)}
+						# number of pages to eras   epage numbers                                   checksum
+					  
+payLoadWriteProtectSection0 = chr(0x00) + chr(0x00) + chr(0x00)
+payLoadWriteUnprotectSection0 = chr
+			 
 response = {"ACK": 0x79, "NACK": 0x1F}
 
 class InitException(Exception):
@@ -243,7 +250,8 @@ class STM32Interface(object):
         '''not implemented according to appnote for now 
         because bootloader version > v3.0 in STM32F4
         '''
-        self.extendedErase("Full")
+        self.extendedErase("AllSectionsbut0")
+        #self.extendedErase("Full")
         
     def extendedErase(self,eraseMode=None):
         ''' full, bank1 and bank2 erase are the only modes implemented for now'''
