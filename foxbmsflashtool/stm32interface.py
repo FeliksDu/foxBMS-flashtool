@@ -83,10 +83,39 @@ commandExt = {"Init": 0x7F}
 payloadEraseMode = {"Full": chr(0xFF) + chr(0xFF) + chr(0x00),
              "Bank1": chr(0xFF) + chr(0xFE) + chr(0x01),
              "Bank2": chr(0xFF) + chr(0xFD) + chr(0x02),
-             "Section0": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x00) + chr(0x00),                                                                                                                                                                                                                                           #checksum
-             "AllSectionsbut0": chr(0x00) + chr(0x0A) + chr(0x00) + chr(0x01) + chr(0x00) + chr(0x02) + chr(0x00) + chr(0x03) + chr(0x00) + chr(0x04) + chr(0x00) + chr(0x05) + chr(0x00) + chr(0x06) + chr(0x00) + chr(0x07) + chr(0x00) + chr(0x08) + chr(0x00) + chr(0x09) + chr(0x00) + chr(0x0A) + chr(0x00) + chr(0x0B) + chr(0x0A),
-             "Section12": chr(0x00) + chr(0x02) + chr(0x00) + chr(0x01) + chr(0x00) + chr(0x02) + chr(0x01)}
-						# number of pages to eras   epage numbers                                   checksum
+             "Section0": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x00) + chr(0x00),
+             "Section1": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x01) + chr(0x01),
+             "Section2": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x02) + chr(0x02),
+             "Section3": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x03) + chr(0x03),
+             "Section4": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x04) + chr(0x04),
+             "Section5": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x05) + chr(0x05),
+             "Section6": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x06) + chr(0x06),
+             "Section7": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x07) + chr(0x07),
+             "Section8": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x08) + chr(0x08),
+             "Section9": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x09) + chr(0x09),
+             "Section10": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x0A) + chr(0x0A),
+             "Section11": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x0B) + chr(0x0B),
+             "Section12": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x0C) + chr(0x0C),
+             "Section13": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x0D) + chr(0x0D),
+             "Section14": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x0E) + chr(0x0E),
+             "Section15": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x0F) + chr(0x0F),
+             "Section16": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x10) + chr(0x10),
+             "Section17": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x11) + chr(0x11),
+             "Section18": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x12) + chr(0x12),
+             "Section19": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x13) + chr(0x13),
+             "Section20": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x14) + chr(0x14),
+             "Section21": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x15) + chr(0x15),
+             "Section22": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x16) + chr(0x16),
+             "Section23": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x17) + chr(0x17),
+             "AllButBootloader": chr(0x00) + chr(0x0A) # Number of sections
+                               + chr(0x00) + chr(0x01) + chr(0x00) + chr(0x02) # Section numbers
+                               + chr(0x00) + chr(0x03) + chr(0x00) + chr(0x04)
+                               + chr(0x00) + chr(0x05) + chr(0x00) + chr(0x06)
+                               + chr(0x00) + chr(0x07) + chr(0x00) + chr(0x08)
+                               + chr(0x00) + chr(0x09) + chr(0x00) + chr(0x0A)
+                               + chr(0x00) + chr(0x0B)
+                               + chr(0x0A), # checksum
+             }
 					  
 payLoadWriteProtectSection0 = chr(0x00) + chr(0x00) + chr(0x00)
 payLoadWriteUnprotectSection0 = chr
@@ -250,8 +279,8 @@ class STM32Interface(object):
         '''not implemented according to appnote for now 
         because bootloader version > v3.0 in STM32F4
         '''
-        self.extendedErase("AllSectionsbut0")
-        #self.extendedErase("Full")
+        self.extendedErase("Full")
+    
         
     def extendedErase(self,eraseMode=None):
         ''' full, bank1 and bank2 erase are the only modes implemented for now'''
@@ -266,6 +295,7 @@ class STM32Interface(object):
             else:
                 self._port.timeout = to
                 return False
+
             
     def writeProtect(self):
         '''        not needed now        '''

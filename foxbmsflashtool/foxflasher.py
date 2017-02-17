@@ -55,6 +55,13 @@ import stm32flasher
 import argparse, sys 
 import time
 import logging
+import os
+import ast
+
+try:
+    from configparser import ConfigParser
+except ImportError:
+    from ConfigParser import ConfigParser 
 
 class FoxFlasher(stm32flasher.STM32Flasher):
     def __init__(self, port=None, file=None, **kwargs):
@@ -74,6 +81,50 @@ class FoxFlasher(stm32flasher.STM32Flasher):
     def enterBootmode(self):
         ''' sets DTR pin, which is connected to microcontroller BOOT pin '''
         self._port.setDTR(1)
+
+
+def get_section_list(start_address, length, mcuconfig):
+        ''' Calculates the sections for the erase and puts them into a list  as lists a 8 byte.
+            Args:
+                start_address (hex): Start address for the write command
+                length (int): length of the data to write
+                mcuconfig (obj): object which contains the specific config data of the u-Controller
+            Returns:
+                section_list (list): list with the lists of sections inside
+        '''
+        start_section = 0
+        end_section = 0
+        sections_startaddress = ast.literal_eval(mcuconfig.get('Controller', 'mcu_sections_startaddress'))
+        sections_endaddress = ast.literal_eval(mcuconfig.get('Controller', 'mcu_sections_endaddress'))
+        numberFlashSections = ast.literal_eval(mcuconfig.get('Controller', 'mcu_number_of_sections'))
+
+        for i in range(numberFlashSections):
+            if start_address >= sections_startaddress[i] and start_address <= sections_endaddress[i]:
+                start_section = i
+        
+        for i in range(numberFlashSections):
+            if (start_address+length-1) >= sections_startaddress[i] and (start_address+length-1) <= sections_endaddress[i]: # -1 because address starts at 0
+                end_section = i  
+        
+        sectionsToErase = range(start_section, (end_section+1))
+        length = len(sectionsToErase)
+        numberOfLists = (length+7)/8
+        section_list = [[] for x in range(numberOfLists)]
+        offset = 0
+        
+        for liste in section_list:
+        
+            if length > 8:    
+                for section in sectionsToErase[offset:offset+8]:
+                        liste.append(section)
+                offset +=8
+                length -=8 
+            if length <= 8 and len(liste)==0:
+                for section in sectionsToErase[offset:offset+length]:
+                    liste.append(section)      
+        
+        return section_list, length-1
+
         
 def auto_int(x):
     return int(x, 0)
@@ -83,7 +134,13 @@ def main():
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog = '''\
 Example:
-%s --port COM3 --erase --write --verify build/src/general/foxbms_flash.bin 
+%s --port COM3 --erase --write --verify --address 0x08004000 build/src/general/foxbms_flash.bin 
+
+Erases the complete flash but the bootloader section and afterwards writes the foxbms_flash.bin to address 0x08004000
+
+%s --port COM3 --write --verify --address 0x08004000 build/src/general/foxbms_flash.bin 
+
+Only erases the sections that are needed to write new bin file to flash memory and afterwards flashes bin file
 
 Copyright (c) 2015, 2016 Fraunhofer IISB.
 All rights reserved.
@@ -92,7 +149,7 @@ license.
 ''' % sys.argv[0])
     
     parser.add_argument('-v', '--verbosity', action='count', default=0, help="increase output verbosity")
-    parser.add_argument('--erase', '-e', action='store_true', help='erase firmware')
+    parser.add_argument('--erase', '-e', action='store_true', help='erase firmware') # erase complete flash but the bootloader memory section
     parser.add_argument('--read',  '-r', action='store_true', help='read and store firmware')
     parser.add_argument('--write',  '-w', action='store_true', help='writes firmware')
     parser.add_argument('--verify', '-y', action='store_true', help='verify the firmware')
@@ -102,8 +159,29 @@ license.
     parser.add_argument('--address', '-a', type=auto_int, default=0x08000000, help='target address')
     parser.add_argument('--goaddress', '-g', type=auto_int, default=-1, help='start address (use -1 for default)')
     parser.add_argument('firmware', metavar = 'FIRMWARE FILE', help='firmware binary')
+    parser.add_argument('--fullerase', '-fe', action='store_true', help='perform a full erase')     # erases complete flash
     
     args = parser.parse_args()
+    
+    # Load mcu config file
+    ''' Create mcuconfig object, read the specific configfile from argparse and creates the variables with the values
+        from the configfile
+    '''
+    mcuconfig = ConfigParser()
+    mcuconfig.read('mcuconfig.ini')
+    start_address_flashmemory = int(mcuconfig.get('Controller', 'start_address_flashmemory'),16)
+    end_address_flashmemory =  int(mcuconfig.get('Controller', 'end_address_flashmemory'),16)
+    sectionNames = ast.literal_eval(mcuconfig.get('Controller', 'mcu_section_names'))
+    
+    # Get size of binfile to flash
+    binsize = os.path.getsize(args.firmware)
+    
+    # If invalid flash address or file too big: exit
+    if (args.address < start_address_flashmemory) or (args.address > end_address_flashmemory) or (args.address + binsize > end_address_flashmemory):
+        sys.exit('Params are not legit. Please check your config and start the script again!')
+    
+    # Calculate sections that are to be deleted
+    sections, erase_sections_no = get_section_list(args.address, binsize, mcuconfig)
     
     if args.verbosity == 1:
         logging.basicConfig(level = logging.INFO)
@@ -129,9 +207,19 @@ license.
                 data = map(lambda c: ord(c), f.read())
 
         if args.erase:
+            ff.extendedErase("AllButBootloader")
+            
+        if args.fullerase:
             ff.erase()
 
         if args.write:
+        
+            # If no full erase was performed
+            if args.erase == False and args.fullerase == False:
+                for element in sections:
+                    for section in element:
+                        ff.extendedErase(sectionNames[section])
+                        
             ff.write(data)
 
         if args.verify:
