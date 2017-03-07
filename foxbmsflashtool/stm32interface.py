@@ -107,14 +107,13 @@ payloadEraseMode = {"Full": chr(0xFF) + chr(0xFF) + chr(0x00),
              "Section21": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x15) + chr(0x15),
              "Section22": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x16) + chr(0x16),
              "Section23": chr(0x00) + chr(0x00) + chr(0x00) + chr(0x17) + chr(0x17),
-             "AllButBootloader": chr(0x00) + chr(0x0A) # Number of sections
-                               + chr(0x00) + chr(0x01) + chr(0x00) + chr(0x02) # Section numbers
-                               + chr(0x00) + chr(0x03) + chr(0x00) + chr(0x04)
-                               + chr(0x00) + chr(0x05) + chr(0x00) + chr(0x06)
-                               + chr(0x00) + chr(0x07) + chr(0x00) + chr(0x08)
-                               + chr(0x00) + chr(0x09) + chr(0x00) + chr(0x0A)
-                               + chr(0x00) + chr(0x0B)
-                               + chr(0x0A), # checksum
+             "AllButBootloader": chr(0x00) + chr(0x09) # Number of sections
+                               + chr(0x00) + chr(0x02) + chr(0x00) + chr(0x03) # Section numbers
+                               + chr(0x00) + chr(0x04) + chr(0x00) + chr(0x05) 
+                               + chr(0x00) + chr(0x06) + chr(0x00) + chr(0x07) 
+                               + chr(0x00) + chr(0x08) + chr(0x00) + chr(0x09) 
+                               + chr(0x00) + chr(0x0A) + chr(0x00) + chr(0x0B)
+                               + chr(0x08), # checksum
              }
 					  
 payLoadWriteProtectSection0 = chr(0x00) + chr(0x00) + chr(0x00)
@@ -289,6 +288,7 @@ class STM32Interface(object):
             to = self._port.timeout
             self._port.timeout = 30
             self._port.write(payloadEraseMode[eraseMode])
+
             if self._ack():
                 self._port.timeout = to
                 return True

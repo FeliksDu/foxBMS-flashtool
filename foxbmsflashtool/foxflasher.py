@@ -138,15 +138,15 @@ Example:
 
 Erases the complete flash but the bootloader section and afterwards writes the foxbms_flash.bin to address 0x08004000
 
-%s --port COM3 --write --verify --address 0x08004000 build/src/general/foxbms_flash.bin 
-
-Only erases the sections that are needed to write new bin file to flash memory and afterwards flashes bin file
-
 Copyright (c) 2015, 2016 Fraunhofer IISB.
 All rights reserved.
 This program has been released under the conditions of the 3-clause BSD
 license.
+
 ''' % sys.argv[0])
+    
+    # --port COM3 --write --verify --address 0x08004000 build/src/general/foxbms_flash.bin 
+    # Only erases the sections that are needed to write new bin file to flash memory and afterwards flashes bin file
     
     parser.add_argument('-v', '--verbosity', action='count', default=0, help="increase output verbosity")
     parser.add_argument('--erase', '-e', action='store_true', help='erase firmware') # erase complete flash but the bootloader memory section
@@ -159,7 +159,8 @@ license.
     parser.add_argument('--address', '-a', type=auto_int, default=0x08000000, help='target address')
     parser.add_argument('--goaddress', '-g', type=auto_int, default=-1, help='start address (use -1 for default)')
     parser.add_argument('firmware', metavar = 'FIRMWARE FILE', help='firmware binary')
-    parser.add_argument('--fullerase', '-fe', action='store_true', help='perform a full erase')     # erases complete flash
+    parser.add_argument('--fullerase', '-fe', action='store_true', help='perform a full erase') # erases complete flash
+    
     
     args = parser.parse_args()
     
