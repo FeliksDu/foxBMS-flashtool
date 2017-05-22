@@ -81,6 +81,10 @@ class FoxFlasher(stm32flasher.STM32Flasher):
     def enterBootmode(self):
         ''' sets DTR pin, which is connected to microcontroller BOOT pin '''
         self._port.setDTR(1)
+        
+    def exitBootmode(self):
+        ''' resets DTR pin, which is connected to microcontroller BOOT pin '''
+        self._port.setDTR(0)
 
 
 def get_section_list(start_address, length, mcuconfig):
@@ -134,11 +138,11 @@ def main():
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog = '''\
 Example:
-%s --port COM3 --erase --write --verify --address 0x08004000 build/src/general/foxbms_flash.bin 
+%s --port COM3 --erase --write --verify --address 0x08008000 build/src/general/foxbms_flash.bin 
 
-Erases the complete flash but the bootloader section and afterwards writes the foxbms_flash.bin to address 0x08004000
+Erases the complete flash but the bootloader section and afterwards writes the foxbms_flash.bin at address 0x08008000 upwards
 
-Copyright (c) 2015, 2016 Fraunhofer IISB.
+Copyright (c) 2015 - 2017 Fraunhofer IISB.
 All rights reserved.
 This program has been released under the conditions of the 3-clause BSD
 license.
@@ -149,7 +153,7 @@ license.
     # Only erases the sections that are needed to write new bin file to flash memory and afterwards flashes bin file
     
     parser.add_argument('-v', '--verbosity', action='count', default=0, help="increase output verbosity")
-    parser.add_argument('--erase', '-e', action='store_true', help='erase firmware') # erase complete flash but the bootloader memory section
+    parser.add_argument('--erase', '-e', action='store_true', help='erase only needed flash depending on startaddress and binary length')
     parser.add_argument('--read',  '-r', action='store_true', help='read and store firmware')
     parser.add_argument('--write',  '-w', action='store_true', help='writes firmware')
     parser.add_argument('--verify', '-y', action='store_true', help='verify the firmware')
@@ -159,7 +163,8 @@ license.
     parser.add_argument('--address', '-a', type=auto_int, default=0x08000000, help='target address')
     parser.add_argument('--goaddress', '-g', type=auto_int, default=-1, help='start address (use -1 for default)')
     parser.add_argument('firmware', metavar = 'FIRMWARE FILE', help='firmware binary')
-    parser.add_argument('--fullerase', '-fe', action='store_true', help='perform a full erase') # erases complete flash
+    parser.add_argument('--extendederase', '-ee', action='store_true', help='erase complete flash but the bootloader memory section')
+    parser.add_argument('--fullerase', '-fe', action='store_true', help='erases complete flash')
     
     
     args = parser.parse_args()
@@ -208,19 +213,17 @@ license.
                 data = map(lambda c: ord(c), f.read())
 
         if args.erase:
+            for element in sections:
+                for section in element:
+                    ff.extendedErase(sectionNames[section])
+            
+        if args.extendederase:
             ff.extendedErase("AllButBootloader")
             
         if args.fullerase:
             ff.erase()
 
-        if args.write:
-        
-            # If no full erase was performed
-            if args.erase == False and args.fullerase == False:
-                for element in sections:
-                    for section in element:
-                        ff.extendedErase(sectionNames[section])
-                        
+        if args.write:          
             ff.write(data)
 
         if args.verify:
@@ -233,6 +236,8 @@ license.
 
         if args.goaddress > -1:
             ff.go(args.goaddress)
+            
+        ff.reset()
             
 if __name__ == "__main__":
     main()
