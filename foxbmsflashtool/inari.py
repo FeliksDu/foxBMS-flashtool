@@ -75,16 +75,31 @@ def _getpath(*args):
 
 
 class USBWatch(watchttyusb.TTYUSBCheckerThread):
+    '''
+    Thread watching the USB port for connections.
+    '''
 
     def __init__(self, parent = None, vid = 0x403, pid = 0x6015, sleepTime = 1):
+        '''
+        :param parent:  parent wx.Window
+        :param vid:     vendor id of USB device
+        :param pid:     PID of USB device
+        :param sleepTime:   interval between polls
+        '''
         watchttyusb.TTYUSBCheckerThread.__init__(self, vid, pid, sleepTime)
         self.parent = parent
 
     def onConnect(self):
+        '''
+        Handler, triggered whenever the queried device is detected.
+        '''
         watchttyusb.TTYUSBCheckerThread.onConnect(self)
         wx.CallAfter(self.parent.registerDevice, self.port, self.isPrimary)
 
     def onDisconnect(self):
+        '''
+        Handler, triggered whenever the queried device is detached.
+        '''
         wx.CallAfter(self.parent.unregisterDevice)
 
 
@@ -93,31 +108,113 @@ class DummyUSBWatch(USBWatch):
     def isConnected(self):
         return os.path.exists('ttyusb.dummy')
 
+
+class FlashData(object):
+
+    KEYS = [
+            'bootloader_body', 
+            'bootloader_header', 
+            'application_body',
+            'application_header', 
+            ]
+
+    DEFAULT_ADDRESSES = [ 
+            0x08000000,
+            0x08007F00,
+            0x08008000,
+            0x080FFF00,
+            ]
+
+    def __init__(self):
+        self._data = {}
+        self._addresses = dict(zip(self.KEYS, self.DEFAULT_ADDRESSES))
+
+    def findFiles(self, root = '.', target = 'primary'):
+        '''
+        :returns:   body, header
+        '''
+
+        _root = os.path.abspath(root)
+        _build = os.path.join(_root, 'build', target, 'foxBMS-%s' % target, 'src', 'general')
+        return os.path.join(_build, 'foxbms_flash.bin'), os.path.join(_build, 'foxbms_flashheader.bin')
+
+    def __setitem__(self, key, fname):
+        self._data[key] = fname
+    
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def _getIdx(self, key):
+        return self.KEYS.index(key)
+
+    def __contains__(self, key):
+        return (key in self._data and not self._data[key] is None)
+
+    def setAddress(self, key, address):
+        self._addresses[key] = address
+
+    def getAddress(self, key):
+        return self._addresses[key]
+
+    def hasBootloader(self):
+        return ('bootloader_body' in self._data and \
+                not self._data['bootloader_body'] is None and \
+                'bootloader_header' in self._data and \
+                not self._data['bootloader_header'] is None)
+
+    def hasApplication(self):
+        return ('application_body' in self._data and \
+                not self._data['application_body'] is None and \
+                'application_header' in self._data and \
+                not self._data['application_header'] is None)
+
+    def iterData(self):
+        for k in self.KEYS:
+            if k in self._data and not self._data[k] is None:
+                yield self._data[k], self._addresses[k]
+
+    def isDataComplete(self):
+        # at least application data must be present
+        return self.hasApplication()
+
 class FlashThread(threading.Thread):
 
-    def __init__(self, parent):
+    def __init__(self, parent, flashdata):
         self.parent = parent
         threading.Thread.__init__(self)
         self.canceling = False
+        self._data = []
+        self.flashdata = flashdata
+
+    def resetData(self):
+        self._data = []
+
+    def addData(self, target, address, fname):
+        self._data += [(target, address, fname)]
+
 
     def run(self):
+
         wx.CallAfter(self.parent.enableWidgets, False)
         wx.CallAfter(self.parent.dontTouch, True)
-        # FIXME args
+
         with foxflasher.FoxFlasher(port = self.parent.port.device, address =
                 0x08000000, dummy = self.parent.dummy) as l:
-            l.erase()
-            # write main
-            with open(self.parent.path_fw, 'rb') as f:
-                data = map(lambda c: ord(c), f.read())
-            l.write(data)
-            l.verify(data)
-            # write header
-            l.address = 0x080FFF00
-            with open(self.parent.path_fw_h, 'rb') as f:
-                data = map(lambda c: ord(c), f.read())
-            l.write(data)
-            l.verify(data)
+
+            # if bootloader to be flashed, full erase
+            # else erase only application section
+            if self.flashdata.hasBootloader():
+                l.erase
+            else:
+                l.extendedErase("AllButBootloader")
+
+            for fn, addr in self.flashdata():
+                with open(fn, 'rb') as f:
+                    data = map(lambda c: ord(c), f.read())
+                l.address = addr
+                l.write(data)
+                l.verify(data)
+
         wx.CallAfter(self.parent.enableWidgets, True)
         wx.CallAfter(self.parent.dontTouch, False)
         wx.CallAfter(logging.info, '__all_done__')
@@ -125,14 +222,12 @@ class FlashThread(threading.Thread):
 
 class FBInariPanel(wx.Panel):
 
-    def __init__(self, parent, path_fw = None, path_fw_h = None, showFP =
+    def __init__(self, parent, flashdata = None, showFP =
             True, dummy = False, swallow = False):
         self.parent = parent
-        self.path_fw = path_fw
-        self.path_fw_h = path_fw_h
         self.deviceFound = False
         self.dummy = dummy
-        self.firmwareSelected = False
+        self.flashdata = flashdata
         self.showFP = showFP
         self._resources = xrc.EmptyXmlResource()
         self._resources.Load(_getpath('xrc', 'inarift.xrc'))
@@ -141,34 +236,37 @@ class FBInariPanel(wx.Panel):
         self.PostCreate(pre)
 
         xrc.XRCCTRL(self, 'flash_b').Bind(wx.EVT_BUTTON, self.onFlash)
+        xrc.XRCCTRL(self, 'find_b').Bind(wx.EVT_BUTTON, self.onFind)
 
-        xrc.XRCCTRL(self, 'firmware_fp').Bind(wx.EVT_FILEPICKER_CHANGED,
-                self.onFirmwareSelected)
-        xrc.XRCCTRL(self, 'firmware_header_fp').Bind(wx.EVT_FILEPICKER_CHANGED,
-                self.onFirmwareSelected)
+        for k in self.flashdata.KEYS:
+            xrc.XRCCTRL(self, '%s_fp' % k).Bind(wx.EVT_FILEPICKER_CHANGED, self.onFirmwareSelected)
 
-        if not self.path_fw is None:
-            xrc.XRCCTRL(self, 'firmware_fp').SetPath(self.path_fw)
-        if not self.path_fw_h is None:
-            xrc.XRCCTRL(self, 'firmware_header_fp').SetPath(self.path_fw_h)
-
-        if not self.path_fw is None and not self.path_fw_h is None and os.path.isfile(self.path_fw) and os.path.isfile(self.path_fw_h):
-            self.firmwareSelected = True
-        else:
-            self.firmwareSelected = False
-
+        self.setControls()
         self.setFlashButton()
         self.startUSBChecker()
 
+    def setControls(self):
+        for k in self.flashdata.KEYS:
+            if k in self.flashdata:
+                xrc.XRCCTRL(self, '%s_fp' % k).SetPath(self.flashdata[k])
+
     def onFirmwareSelected(self, evt):
-        self.path_fw = xrc.XRCCTRL(self, 'firmware_fp').GetPath()
-        self.path_fw_h = xrc.XRCCTRL(self, 'firmware_header_fp').GetPath()
- 
-        if os.path.isfile(self.path_fw) and os.path.isfile(self.path_fw_h):
-            self.firmwareSelected = True
-        else:
-            self.firmwareSelected = False
+        for k in self.flashdata.KEYS:
+            _path = xrc.XRCCTRL(self, '%s_fp' % k).GetPath()
+            if os.path.isfile(_path):
+                self.flashdata[k] = _path
+            else:
+                self.flashdata[k] = None
         self.setFlashButton()
+
+    def onFind(self, evt):
+        _path = xrc.XRCCTRL(self, 'root_d').GetPath()
+        if _path is None:
+            return
+        self.setPaths(
+                _path,
+                xrc.XRCCTRL(self, 'board_c').GetStringSelection()
+                )
 
     def registerDevice(self, port, prim = None):
         self.deviceFound = True
@@ -193,7 +291,7 @@ class FBInariPanel(wx.Panel):
         if self.deviceFound:
             xrc.XRCCTRL(self, 'flash_b').SetBitmap(wx.Bitmap(_getpath('xrc', 'upload.png')))
             xrc.XRCCTRL(self, 'flash_b').SetBitmapDisabled(wx.Bitmap(_getpath('xrc', 'upload.png')))
-            xrc.XRCCTRL(self, 'flash_b').Enable(self.firmwareSelected)
+            xrc.XRCCTRL(self, 'flash_b').Enable(self.flashdata.isDataComplete())
         else:
             xrc.XRCCTRL(self, 'flash_b').SetBitmap(wx.Bitmap(_getpath('xrc', 'noupload.png')))
             xrc.XRCCTRL(self, 'flash_b').SetBitmapDisabled(wx.Bitmap(_getpath('xrc', 'noupload.png')))
@@ -211,7 +309,7 @@ class FBInariPanel(wx.Panel):
         self.usbChecker.join()
 
     def onFlash(self, evt):
-        th = FlashThread(self)
+        th = FlashThread(self, self.flashdata)
         th.start()
 
     def dontTouch(self, enabled):
@@ -225,18 +323,11 @@ class FBInariPanel(wx.Panel):
         for widget in self.GetChildren(): 
             widget.Enable(enable) 
 
-    def setPaths(self, root):
-        _build = os.path.join(root, 'build', 'src', 'general')
-        self.path_fw = os.path.join(_build, 'foxbms_flash.bin')
-        self.path_fw_h = os.path.join(_build, 'foxbms_flashheader.bin')
-        xrc.XRCCTRL(self, 'firmware_fp').SetPath(self.path_fw)
-        xrc.XRCCTRL(self, 'firmware_header_fp').SetPath(self.path_fw_h)
-        if os.path.isfile(self.path_fw) and os.path.isfile(self.path_fw_h):
-            self.firmwareSelected = True
-        else:
-            self.firmwareSelected = False
-
-
+    def setPaths(self, root, target = 'primary'):
+        b,h = self.flashdata.findFiles(root, target)
+        xrc.XRCCTRL(self, 'application_body_fp').SetPath(b)
+        xrc.XRCCTRL(self, 'application_header_fp').SetPath(h)
+        self.onFirmwareSelected(None)
 
 
 class CustomConsoleHandler(logging.StreamHandler):
@@ -253,16 +344,14 @@ class CustomConsoleHandler(logging.StreamHandler):
 class FBInariFrame(wx.Frame):
     PROGRESS_RE = re.compile('\[\s*(\d+)/(\d+)\] (.*)')
 
-    def __init__(self, parent, path_fw_h = None, path_fw = None, dummy =
-            False):
+    def __init__(self, parent, flashdata=None, dummy=False):
         dummy_st = ''
         if dummy:
             dummy_st = ' (dry-run mode)'
         wx.Frame.__init__(self, parent, -1, title = 'foxBMS Inari FlashTool%s' % dummy_st)
         self.parent = parent
         ms = wx.BoxSizer(wx.VERTICAL)
-        self.fbipanel = FBInariPanel(self, path_fw_h = path_fw_h, path_fw =
-                path_fw, dummy = dummy)
+        self.fbipanel = FBInariPanel(self, flashdata=flashdata, dummy = dummy)
         ms.Add(self.fbipanel, 0, wx.EXPAND | wx.ALL, 5)
         self.dt = self.fbipanel._resources.LoadPanel(self, "details_p")
         ms.Add(self.dt, 0, wx.EXPAND | wx.ALL, 5)
@@ -327,15 +416,13 @@ class FBInariFrame(wx.Frame):
 
 class FBInariApp(wx.App):
 
-    def __init__(self, path_fw = None, path_fw_h = None, dummy = False):
-        self.path_fw_h = path_fw_h
-        self.path_fw = path_fw
+    def __init__(self, flashdata=None, dummy = False):
+        self.flashdata = flashdata
         self.dummy = dummy
         wx.App.__init__(self, False)
 
     def OnInit(self):
-        frame = FBInariFrame(None, path_fw = self.path_fw, path_fw_h =
-                self.path_fw_h, dummy = self.dummy)
+        frame = FBInariFrame(None, flashdata=self.flashdata, dummy = self.dummy)
         self.SetTopWindow(frame)
         frame.Show()
         return True
@@ -364,16 +451,17 @@ def getpath(parser, arg, mode = 'r'):
         return os.path.abspath(arg)
 
 def main():
+
+    flashdata = FlashData()
+
     import argparse
     parser = argparse.ArgumentParser(description='foxBMS---Inari flash tool')
 
     parser.add_argument('-v', '--verbosity', action='count', default=1, help="increase output verbosity")
-    parser.add_argument('--header', type=lambda x: getpath(parser, x, 'r'),
-            metavar='HEADER',
-            help='Header part of firmware')
-    parser.add_argument('--main', type=lambda x: getpath(parser, x, 'r'),
-            metavar='MAIN',
-            help='Main part of firmware')
+
+    for k in flashdata.KEYS:
+        parser.add_argument('--' + k, type=lambda x: getpath(parser, x, 'r'), metavar=k.upper)
+
     parser.add_argument('--dry', '-d', action='store_true', help='')
 
     args = parser.parse_args()
@@ -384,9 +472,9 @@ def main():
         logging.basicConfig(level = logging.DEBUG)
     else:
         logging.basicConfig(level = logging.ERROR)
+    
 
-    app = FBInariApp(path_fw = args.main, path_fw_h = args.header, dummy =
-            args.dry)
+    app = FBInariApp(flashdata = flashdata, dummy = args.dry)
 
     app.MainLoop()
 
