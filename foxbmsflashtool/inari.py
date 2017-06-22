@@ -121,7 +121,7 @@ class FlashData(object):
     DEFAULT_ADDRESSES = [ 
             0x08000000,
             0x08007F00,
-            0x08008000,
+            0x08000000,		# FIXME when enabling bootloader change back to 0x08008000
             0x080FFF00,
             ]
 
@@ -177,6 +177,30 @@ class FlashData(object):
         # at least application data must be present
         return self.hasApplication()
 
+class DummyFlasher(object):
+
+    def __init__(self, port=None, file=None, **kwargs):
+        logging.debug('opening with args %s' % kwargs)
+
+    def __enter__(self):
+        return self
+
+    def __exit__ (self, exception_type, exception_value,  traceback):
+        logging.debug('closing')
+
+    def erase(self):
+        logging.debug('erase()')
+
+    def extendedErase(self, mode):
+        logging.debug('extendedErase(): mode: %s' % mode)
+
+    def write(self, data):
+        logging.debug('write()')
+
+    def verify(self, data):
+        logging.debug('verify()')
+
+
 class FlashThread(threading.Thread):
 
     def __init__(self, parent, flashdata):
@@ -198,17 +222,24 @@ class FlashThread(threading.Thread):
         wx.CallAfter(self.parent.enableWidgets, False)
         wx.CallAfter(self.parent.dontTouch, True)
 
-        with foxflasher.FoxFlasher(port = self.parent.port.device, address =
-                0x08000000, dummy = self.parent.dummy) as l:
+        if self.parent.dummy:
+            _flasher = DummyFlasher
+            _port = None
+        else:
+            _flasher = foxflasher.FoxFlasher
+            _port = self.parent.port.device
+
+        with _flasher(port = _port, address = 0x08000000, dummy = self.parent.dummy) as l:
 
             # if bootloader to be flashed, full erase
             # else erase only application section
             if self.flashdata.hasBootloader():
-                l.erase
+                l.erase()
             else:
                 l.extendedErase("AllButBootloader")
 
-            for fn, addr in self.flashdata():
+            for fn, addr in self.flashdata.iterData():
+                logging.debug('file: %s, addr: %s' % (fn, addr))
                 with open(fn, 'rb') as f:
                     data = map(lambda c: ord(c), f.read())
                 l.address = addr
@@ -473,7 +504,6 @@ def main():
     else:
         logging.basicConfig(level = logging.ERROR)
     
-
     app = FBInariApp(flashdata = flashdata, dummy = args.dry)
 
     app.MainLoop()

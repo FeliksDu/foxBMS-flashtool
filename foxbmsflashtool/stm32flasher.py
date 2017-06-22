@@ -115,7 +115,7 @@ class STM32Flasher(stm32interface.STM32Interface):
         logging.debug("Write {0} bytes at {1:#x}".format(length, address))
         self.writeMemory(address, data[offset:offset+length] )
         logging.info("[{0}/{1}] written".format(alllng, alllng))
-        logging.info("Flash Write End")
+        #logging.info("Flash Write End")
         
     def erase(self):
         logging.info("Flash Erase Start")
@@ -135,7 +135,7 @@ class STM32Flasher(stm32interface.STM32Interface):
             for i in xrange(0, len(data)):
                 if data[i] != verify[i]:
                     self.veriFail += hex(i) + ': ' + hex(data[i]) + ' vs ' + hex(verify[i]) + '\n'
-            logging.info(self.veriFail)
+            logging.error(self.veriFail)
             return False
         
     def __str__(self):
