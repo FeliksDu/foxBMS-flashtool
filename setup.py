@@ -54,6 +54,8 @@ www.foxbms.org
 
 import setuptools
 from setuptools import setup, find_packages
+import os
+import sys
 
 setup(
         name = "foxbmsflashtool",
@@ -62,6 +64,7 @@ setup(
         author = "Tim Fuehner",
         author_email = "support@foxbms.org",
         package_data={'foxbmsflashtool': ['xrc/*',]},
+        data_files=[(os.path.join(sys.prefix, 'etc', 'foxbms'), ['foxbmsflashtool/mcuconfig.ini'])],
         zip_safe = False
         )
 

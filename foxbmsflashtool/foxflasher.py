@@ -151,6 +151,9 @@ license.
     
     # --port COM3 --write --verify --address 0x08004000 build/src/general/foxbms_flash.bin 
     # Only erases the sections that are needed to write new bin file to flash memory and afterwards flashes bin file
+
+
+    _configfile = os.path.join(sys.prefix, 'etc', 'foxbms', 'mcuconfig.ini')
     
     parser.add_argument('-v', '--verbosity', action='count', default=0, help="increase output verbosity")
     parser.add_argument('--erase', '-e', action='store_true', help='erase only needed flash depending on startaddress and binary length')
@@ -162,22 +165,35 @@ license.
     parser.add_argument('--port', '-p', type=str, default='/dev/tty.usbserial-ftCYPMYJ', help='ttyUSB port')
     parser.add_argument('--address', '-a', type=auto_int, default=0x08000000, help='target address')
     parser.add_argument('--goaddress', '-g', type=auto_int, default=-1, help='start address (use -1 for default)')
+    parser.add_argument('--config', '-c', default=_configfile, help='path to configuration file (default: {})'.format(_configfile))
     parser.add_argument('firmware', metavar = 'FIRMWARE FILE', help='firmware binary')
     parser.add_argument('--extendederase', '-ee', action='store_true', help='erase complete flash but the bootloader memory section')
     parser.add_argument('--fullerase', '-fe', action='store_true', help='erases complete flash')
-    
+    # FIXME add command line option to specify mcuconfig.ini
     
     args = parser.parse_args()
+
+    if args.verbosity == 1:
+        logging.basicConfig(level = logging.INFO)
+    elif args.verbosity > 1:
+        logging.basicConfig(level = logging.DEBUG)
+    else:
+        logging.basicConfig(level = logging.ERROR)
+
+    if not os.path.isfile(args.config):
+        raise RuntimeError('Required configuration file {} not found.'.format(args.config))
     
     # Load mcu config file
     ''' Create mcuconfig object, read the specific configfile from argparse and creates the variables with the values
         from the configfile
     '''
     mcuconfig = ConfigParser()
-    mcuconfig.read('mcuconfig.ini')
+    mcuconfig.read(args.config)
     start_address_flashmemory = int(mcuconfig.get('Controller', 'start_address_flashmemory'),16)
     end_address_flashmemory =  int(mcuconfig.get('Controller', 'end_address_flashmemory'),16)
     sectionNames = ast.literal_eval(mcuconfig.get('Controller', 'mcu_section_names'))
+
+    logging.debug(sectionNames)
     
     # Get size of binfile to flash
     binsize = os.path.getsize(args.firmware)
@@ -189,12 +205,6 @@ license.
     # Calculate sections that are to be deleted
     sections, erase_sections_no = get_section_list(args.address, binsize, mcuconfig)
     
-    if args.verbosity == 1:
-        logging.basicConfig(level = logging.INFO)
-    elif args.verbosity > 1:
-        logging.basicConfig(level = logging.DEBUG)
-    else:
-        logging.basicConfig(level = logging.ERROR)
 
     if args.read:
         if args.erase:
